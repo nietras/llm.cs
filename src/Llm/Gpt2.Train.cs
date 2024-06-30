@@ -36,8 +36,7 @@ internal static partial class Gpt2
     public static unsafe void Train(string dataDirectory, ILlm llmToUse)
     {
         // build the GPT-2 model from a checkpoint
-        Model model = new();
-        BuildFromCheckpoint(model, dataDirectory + ModelBinaryFileName);
+        Model model = BuildFromCheckpoint(dataDirectory + ModelBinaryFileName);
 
         // build the DataLoaders from tokens files. for now use tiny_shakespeare if available, else tiny_stories
         var tiny_stories_train = dataDirectory + DataTinyStoriesTrainBinaryFileName;

@@ -21,8 +21,7 @@ internal static partial class Gpt2
     public static unsafe void Test(string dataDirectory, ILlm llmToUse, int steps, Action<string>? log)
     {
         // build the GPT-2 model from a checkpoint
-        var model = new Model();
-        BuildFromCheckpoint(model, dataDirectory + ModelBinaryFileName);
+        var model = BuildFromCheckpoint(dataDirectory + ModelBinaryFileName);
         int vocabularySize = model.Config.VocabularySize;
         int channelCount = model.Config.ChannelCount;
         int maxTokenCount = model.Config.MaxTokenCount;

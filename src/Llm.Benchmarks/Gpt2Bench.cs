@@ -18,7 +18,7 @@ namespace nietras.LargeLanguageModel.Benchmarks;
 public class Gpt2Bench
 {
     const string DataDirectory = "../../../";
-    Model _model = new();
+    Model _model = null!;
     ExpectedTensors _expectedInputsOutputs;
     ParameterTensors _expectedGrads;
     TimeLlm? _llm;
@@ -35,7 +35,7 @@ public class Gpt2Bench
             DataDirectory, t => Trace.WriteLine(t));
 
         // build the GPT-2 model from a checkpoint
-        BuildFromCheckpoint(_model, DataDirectory + ModelBinaryFileName);
+        _model = BuildFromCheckpoint(DataDirectory + ModelBinaryFileName);
 
         (_expectedInputsOutputs, _expectedGrads) = ReadExpectedState(_model, DataDirectory);
 

@@ -22,9 +22,12 @@ internal static partial class Gpt2
     // ----------------------------------------------------------------------------
     public unsafe class Model
     {
-        public Model() { }
+        public Model(Config config)
+        {
+            Config = config;
+        }
 
-        public Config Config;
+        public Config Config { get; }
 
         // weights (parameters) of the model, and their sizes
         public ParameterTensors Parameters;
@@ -48,7 +51,7 @@ internal static partial class Gpt2
         public int TokenCount; // the sequence length (T) of current forward pass
     }
 
-    public unsafe struct Config
+    public record Config
     {
         public int MaxTokenCount; // max sequence length, e.g. 1024
         public int VocabularySize; // vocab size, e.g. 50257
@@ -153,7 +156,7 @@ internal static partial class Gpt2
         public float* losses; // (B, T)
     }
 
-    public unsafe static void BuildFromCheckpoint(Model model, string checkpointFilePath)
+    public unsafe static Model BuildFromCheckpoint(string checkpointFilePath)
     {
         // read in model from a checkpoint file
         using var file = File.OpenRead(checkpointFilePath);
@@ -166,11 +169,14 @@ internal static partial class Gpt2
 
         // read in hyperparameters
         int maxT, V, L, NH, C;
-        model.Config.MaxTokenCount = maxT = header[2];
-        model.Config.VocabularySize = V = header[3];
-        model.Config.LayerCount = L = header[4];
-        model.Config.HeadCount = NH = header[5];
-        model.Config.ChannelCount = C = header[6];
+        var config = new Config()
+        {
+            MaxTokenCount = maxT = header[2],
+            VocabularySize = V = header[3],
+            LayerCount = L = header[4],
+            HeadCount = NH = header[5],
+            ChannelCount = C = header[6],
+        };
         Log("[GPT-2]");
         Log($"MaxTokenCount: {maxT}");
         Log($"VocabularySize: {V}");
@@ -178,6 +184,7 @@ internal static partial class Gpt2
         Log($"HeadCount: {NH}");
         Log($"ChannelCount: {C}");
 
+        var model = new Model(config);
         // allocate space for all the parameters and read them in
         model.ParameterSizes[0] = V * C; // wte
         model.ParameterSizes[1] = maxT * C; // wpe
@@ -215,6 +222,8 @@ internal static partial class Gpt2
         model.v_memory = null;
         model.Batchsize = 0;
         model.TokenCount = 0;
+
+        return model;
     }
 
     internal readonly record struct TrainStepTimings(double Total_ms, double Forward_ms, double ZeroGrad_ms, double Backward_ms, double Update_ms);
