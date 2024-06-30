@@ -35,7 +35,7 @@ public class Gpt2Bench
             DataDirectory, t => Trace.WriteLine(t));
 
         // build the GPT-2 model from a checkpoint
-        BuildFromCheckpoint(ref _model, DataDirectory + ModelBinaryFileName);
+        BuildFromCheckpoint(_model, DataDirectory + ModelBinaryFileName);
 
         (_expectedInputsOutputs, _expectedGrads) = ReadExpectedState(_model, DataDirectory);
 
@@ -47,7 +47,7 @@ public class Gpt2Bench
     [Benchmark]
     public unsafe float Train()
     {
-        var (loss, t) = TrainStep(ref _model,
+        var (loss, t) = TrainStep(_model,
             _expectedInputsOutputs.InputTokenIndices, _expectedInputsOutputs.OutputTokenIndices,
             _expectedInputsOutputs.BatchSize, _expectedInputsOutputs.TokenCount,
             _llm!, _step);
@@ -63,6 +63,6 @@ public class Gpt2Bench
         free(_expectedInputsOutputs.ExpectedLogits);
         free(_expectedInputsOutputs.ExpectedLoss);
         free(_expectedGrads.MemoryPtr);
-        Free(ref _model);
+        Free(_model);
     }
 }

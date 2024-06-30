@@ -20,7 +20,7 @@ internal static partial class Gpt2
     // ----------------------------------------------------------------------------
     // GPT-2 model definition
     // ----------------------------------------------------------------------------
-    public unsafe struct Model
+    public unsafe class Model
     {
         public Model() { }
 
@@ -153,7 +153,7 @@ internal static partial class Gpt2
         public float* losses; // (B, T)
     }
 
-    public unsafe static void BuildFromCheckpoint(ref Model model, string checkpointFilePath)
+    public unsafe static void BuildFromCheckpoint(Model model, string checkpointFilePath)
     {
         // read in model from a checkpoint file
         using var file = File.OpenRead(checkpointFilePath);
@@ -227,18 +227,18 @@ internal static partial class Gpt2
         return $"{t.Total_ms,5:F0} ms = Forward {t.Forward_ms,5:F0} ms ZeroGrad {t.ZeroGrad_ms,3:F0} ms Backward {t.Backward_ms,4:F0} ms Update {t.Update_ms,4:F0} ms";
     }
 
-    internal static unsafe TrainStepResult TrainStep(ref Model model,
+    internal static unsafe TrainStepResult TrainStep(Model model,
         int* inputTokenIndices, int* targetTokenIndices, int batchSize, int tokenCount,
         TimeLlm llm, int step)
     {
         var t0 = Stopwatch.GetTimestamp();
-        var loss = Forward(ref model, inputTokenIndices, targetTokenIndices, batchSize, tokenCount, llm);
+        var loss = Forward(model, inputTokenIndices, targetTokenIndices, batchSize, tokenCount, llm);
         var t1 = Stopwatch.GetTimestamp();
-        ZeroGrad(ref model, llm);
+        ZeroGrad(model, llm);
         var t2 = Stopwatch.GetTimestamp();
-        Backward(ref model, inputTokenIndices, targetTokenIndices, llm);
+        Backward(model, inputTokenIndices, targetTokenIndices, llm);
         var t3 = Stopwatch.GetTimestamp();
-        Update(ref model, learningRate: 1e-4f, beta1: 0.9f, beta2: 0.999f,
+        Update(model, learningRate: 1e-4f, beta1: 0.9f, beta2: 0.999f,
                eps: 1e-8f, weightDecay: 0.01f, step + 1, llm);
         var t4 = Stopwatch.GetTimestamp();
         TrainStepTimings timings = new((t4 - t0) * s_tickstoMs,
@@ -246,7 +246,7 @@ internal static partial class Gpt2
         return new(loss, timings);
     }
 
-    static unsafe float Forward(ref Model model, int* inputs, int* targetTokenIndices, int B, int T, TimeLlm llm)
+    static unsafe float Forward(Model model, int* inputs, int* targetTokenIndices, int B, int T, TimeLlm llm)
     {
         // targetTokenIndices are optional and could be null
 
@@ -262,7 +262,7 @@ internal static partial class Gpt2
         int NH = model.Config.HeadCount;
         int C = model.Config.ChannelCount;
 
-        EnsureOutputMemory(ref model, B, T, V, L, NH, C);
+        EnsureOutputMemory(model, B, T, V, L, NH, C);
 
         llm.Part = "0." + nameof(Forward);
         llm.Index = -1;
@@ -344,7 +344,7 @@ internal static partial class Gpt2
 
     }
 
-    static unsafe void ZeroGrad(ref Model model, TimeLlm llm)
+    static unsafe void ZeroGrad(Model model, TimeLlm llm)
     {
         llm.Part = "1." + nameof(ZeroGrad);
         llm.Index = -1;
@@ -352,14 +352,14 @@ internal static partial class Gpt2
         if (model.OutputGradients.MemoryPtr != null) { llm.Zero(model.OutputGradients.MemoryPtr, model.OutputCount); }
     }
 
-    static unsafe void Backward(ref Model model, int* inputTokenIndices, int* targetTokenIndices, TimeLlm llm)
+    static unsafe void Backward(Model model, int* inputTokenIndices, int* targetTokenIndices, TimeLlm llm)
     {
         // lazily allocate the memory for gradients of the weights and activations, if needed
         if (model.ParameterGradients.MemoryPtr == null)
         {
             model.ParameterGradients = AllocateAndSetPointers<ParameterTensors>(model.ParameterSizes);
             model.OutputGradients = AllocateAndSetPointers<OutputTensors>(model.OutputSizes);
-            ZeroGrad(ref model, llm);
+            ZeroGrad(model, llm);
         }
 
         // convenience shortcuts
@@ -461,7 +461,7 @@ internal static partial class Gpt2
         llm.EmbedBackward(grads_acts.encoded, inputTokenIndices, B, T, C, grads.wte, grads.wpe);
     }
 
-    public static unsafe void Update(ref Model model,
+    public static unsafe void Update(Model model,
         float learningRate, float beta1, float beta2, float eps, float weightDecay, int t, TimeLlm llm)
     {
         // lazily allocate the memory for m_memory and v_memory
@@ -507,7 +507,7 @@ internal static partial class Gpt2
         return tensorPtrs;
     }
 
-    static unsafe void EnsureOutputMemory(ref Model model, int B, int T, int V, int L, int NH, int C)
+    static unsafe void EnsureOutputMemory(Model model, int B, int T, int V, int L, int NH, int C)
     {
         // allocate space for all the activations if needed (done here, lazily)
         if (model.Outputs.MemoryPtr == null)
@@ -561,7 +561,7 @@ internal static partial class Gpt2
         }
     }
 
-    internal static unsafe void Free(ref Model model)
+    internal static unsafe void Free(Model model)
     {
         free(model.Parameters.MemoryPtr);
         free(model.ParameterGradients.MemoryPtr);

@@ -37,7 +37,7 @@ internal static partial class Gpt2
     {
         // build the GPT-2 model from a checkpoint
         Model model = new();
-        BuildFromCheckpoint(ref model, dataDirectory + ModelBinaryFileName);
+        BuildFromCheckpoint(model, dataDirectory + ModelBinaryFileName);
 
         // build the DataLoaders from tokens files. for now use tiny_shakespeare if available, else tiny_stories
         var tiny_stories_train = dataDirectory + DataTinyStoriesTrainBinaryFileName;
@@ -74,7 +74,7 @@ internal static partial class Gpt2
                 for (int i = 0; i < validBatchCount; i++)
                 {
                     validLoader.NextBatch();
-                    var valildBatchLoss = Forward(ref model, validLoader.InputTokenIndices, validLoader.TargetTokenIndices, B, T, llm);
+                    var valildBatchLoss = Forward(model, validLoader.InputTokenIndices, validLoader.TargetTokenIndices, B, T, llm);
                     validLoss += valildBatchLoss;
                 }
                 validLoss /= validBatchCount;
@@ -84,7 +84,7 @@ internal static partial class Gpt2
             // do a training step
             // TODO: Abstract loader and add to step perhaps and part of timings)
             trainLoader.NextBatch();
-            var (loss, timings) = TrainStep(ref model, trainLoader.InputTokenIndices, trainLoader.TargetTokenIndices, B, T, llm, step);
+            var (loss, timings) = TrainStep(model, trainLoader.InputTokenIndices, trainLoader.TargetTokenIndices, B, T, llm, step);
             Log($"step {step}: train loss {loss} ({timings.ToReport()})");
 
             // once in a while do model inference to print generated text
@@ -97,7 +97,7 @@ internal static partial class Gpt2
                     // for each t, we re-compute all activations between 0 and t
                     // leaving this alone because you want separate code for inference anyway
                     // the inference here is just for sanity checking purposes
-                    Forward(ref model, gen_tokens, null, 1, t, llm);
+                    Forward(model, gen_tokens, null, 1, t, llm);
                     float* probabilities = model.Outputs.probabilities + (t - 1) * model.Config.VocabularySize;
                     float coin = random_f32(&rng_state);
                     int next_token = sample_mult(probabilities, model.Config.VocabularySize, coin);
@@ -112,6 +112,6 @@ internal static partial class Gpt2
             }
         }
 
-        Free(ref model);
+        Free(model);
     }
 }

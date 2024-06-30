@@ -8,7 +8,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace nietras.LargeLanguageModel;
 
-public unsafe interface ITensorBase<T>
+public interface ITensorBase<T>
 {
     public ReadOnlySpan<nint> Lengths { get; }
     public ReadOnlySpan<nint> Strides { get; }

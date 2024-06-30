@@ -22,7 +22,7 @@ internal static partial class Gpt2
     {
         // build the GPT-2 model from a checkpoint
         var model = new Model();
-        BuildFromCheckpoint(ref model, dataDirectory + ModelBinaryFileName);
+        BuildFromCheckpoint(model, dataDirectory + ModelBinaryFileName);
         int vocabularySize = model.Config.VocabularySize;
         int channelCount = model.Config.ChannelCount;
         int maxTokenCount = model.Config.MaxTokenCount;
@@ -59,7 +59,7 @@ internal static partial class Gpt2
             var timingEnabled = step >= JitAndWarmupCount;
             llm.Enabled = timingEnabled;
 
-            var (loss, t) = TrainStep(ref model,
+            var (loss, t) = TrainStep(model,
                 inputsOutputs.InputTokenIndices, inputsOutputs.OutputTokenIndices,
                 inputsOutputs.BatchSize, inputsOutputs.TokenCount,
                 llm, step);
@@ -102,7 +102,7 @@ internal static partial class Gpt2
         free(inputsOutputs.ExpectedLogits);
         free(inputsOutputs.ExpectedLoss);
         free(expectedGrads.MemoryPtr);
-        Free(ref model);
+        Free(model);
 
         if (!allOk) { throw new ArithmeticException($"{llmToUse.GetType().Name} failed {nameof(Gpt2)} train test run, see output for details."); }
     }
