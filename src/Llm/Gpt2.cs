@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace nietras.LargeLanguageModel;
@@ -61,20 +59,8 @@ internal static partial class Gpt2
 
     unsafe interface ITensorPtrs { public float* MemoryPtr { get; } }
 
-    public unsafe interface ITensor<T> where T : unmanaged
+    public sealed class ParameterTensorsNew(in Config c, object s) : Tensors<float>(s)
     {
-        public T* Ptr { get; }
-        public T* PtrAt(int index) => Ptr + Strides[index];
-        public ReadOnlySpan<nint> Lengths { get; }
-        public ReadOnlySpan<nint> Strides { get; }
-        public nint Count { get; }
-        public string Name { get; }
-    }
-
-    public sealed class ParameterTensorsNew(in Config c, object s) : IDisposable
-    {
-        readonly State _state = (State)s;
-
         public static ParameterTensorsNew Create(in Config c)
         {
             var s = new State();
@@ -82,8 +68,6 @@ internal static partial class Gpt2
             s.Ntv = new Ntv<float>(s.TotalCount);
             return tensors;
         }
-
-        public IReadOnlyList<ITensor<float>> Tensors => _state.Tensors;
 
         // Implicitly depends on property initialization following declared
         // order of properties.
@@ -111,95 +95,6 @@ internal static partial class Gpt2
 
         public ITensor<float> LayerNormFinalWeights { get; } = New([c.ChannelCount], s);
         public ITensor<float> LayerNormFinalBias { get; } = New([c.ChannelCount], s);
-
-        unsafe static Tensor<float> New(nint[] lengths, object s, [CallerMemberName] string name = "")
-        {
-            var state = (State)s;
-            var strides = CalculateStrides(lengths);
-            Tensor<float> tensor = new(() => state.Ntv!.Ptr, state.TotalCount, lengths, strides, name);
-            state.Tensors.Add(tensor);
-            state.TotalCount += tensor.Count;
-            return tensor;
-        }
-
-        unsafe delegate T* GetPtr<T>() where T : unmanaged;
-        [DebuggerDisplay("{DebuggerDisplay,nq}")]
-        sealed unsafe class Tensor<T>(GetPtr<T> ptr, nint offset, nint[] lengths, nint[] strides, string name)
-            : ITensor<T>
-            where T : unmanaged
-        {
-            public T* Ptr => ptr() + Offset;
-            public nint Offset { get; } = offset;
-            public ReadOnlySpan<nint> Lengths => lengths;
-            public ReadOnlySpan<nint> Strides => strides;
-            public nint Count { get; } = lengths.Product();
-            public string Name { get; } = name;
-
-            private string DebuggerDisplay => $"{Name} {Lengths.ToShapeText()}={Count:D}";
-        }
-
-        public static nint[] CalculateStrides(ReadOnlySpan<nint> lengths)
-        {
-            var strides = new nint[lengths.Length];
-            if (lengths.Length == 1 && lengths[0] == 0 || lengths.Length == 0)
-            {
-                strides[0] = 0;
-                return strides;
-            }
-            nint stride = 1;
-            for (var i = strides.Length - 1; i >= 0; i--)
-            {
-                strides[i] = stride;
-                stride *= lengths[i];
-            }
-            return strides;
-        }
-
-        sealed class State
-        {
-            public Ntv<float>? Ntv { get; set; } = null;
-            public List<Tensor<float>> Tensors { get; set; } = [];
-            public nint TotalCount { get; set; } = 0;
-        }
-
-        void DisposeManagedResources()
-        {
-            _state.Ntv?.Dispose();
-        }
-
-        #region Dispose
-        public void Dispose()
-        {
-            Dispose(true);
-        }
-
-        // Dispose(bool disposing) executes in two distinct scenarios.
-        // If disposing equals true, the method has been called directly
-        // or indirectly by a user's code. Managed and unmanaged resources
-        // can be disposed.
-        // If disposing equals false, the method has been called by the 
-        // runtime from inside the finalizer and you should not reference 
-        // other objects. Only unmanaged resources can be disposed.
-        void Dispose(bool disposing)
-        {
-            // Dispose only if we have not already disposed.
-            if (!m_disposed)
-            {
-                // If disposing equals true, dispose all managed and unmanaged resources.
-                // I.e. dispose managed resources only if true, unmanaged always.
-                if (disposing)
-                {
-                    DisposeManagedResources();
-                }
-
-                // Call the appropriate methods to clean up unmanaged resources here.
-                // If disposing is false, only the following code is executed.
-            }
-            m_disposed = true;
-        }
-
-        volatile bool m_disposed = false;
-        #endregion
     }
 
 

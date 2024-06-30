@@ -45,6 +45,25 @@ internal static class Extensions
         return product;
     }
 
+    public static nint[] CalculateStrides(this nint[] lengths) => CalculateStrides(lengths.AsSpan());
+
+    public static nint[] CalculateStrides(this ReadOnlySpan<nint> lengths)
+    {
+        var strides = new nint[lengths.Length];
+        if (lengths.Length == 1 && lengths[0] == 0 || lengths.Length == 0)
+        {
+            strides[0] = 0;
+            return strides;
+        }
+        nint stride = 1;
+        for (var i = strides.Length - 1; i >= 0; i--)
+        {
+            strides[i] = stride;
+            stride *= lengths[i];
+        }
+        return strides;
+    }
+
     public static string ToShapeText(this ReadOnlySpan<nint> values)
     {
         Span<char> buffer = stackalloc char[1024];
