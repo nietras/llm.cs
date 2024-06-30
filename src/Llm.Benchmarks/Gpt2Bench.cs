@@ -18,7 +18,7 @@ namespace nietras.LargeLanguageModel.Benchmarks;
 public class Gpt2Bench
 {
     const string DataDirectory = "../../../";
-    GPT2 _model = new();
+    Model _model = new();
     ExpectedTensors _expectedInputsOutputs;
     ParameterTensors _expectedGrads;
     TimeLlm? _llm;

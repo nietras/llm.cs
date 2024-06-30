@@ -31,4 +31,31 @@ internal static class Extensions
             totalReadCount += countToRead;
         }
     }
+
+    public static nint Product(this nint[] values) => Product(values.AsSpan());
+
+    public static nint Product(this ReadOnlySpan<nint> values)
+    {
+        if (values.Length == 0) { return 0; }
+        var product = values[0];
+        for (var i = 1; i < values.Length; i++)
+        {
+            product *= values[i];
+        }
+        return product;
+    }
+
+    public static string ToShapeText(this ReadOnlySpan<nint> values)
+    {
+        Span<char> buffer = stackalloc char[1024];
+        var handler = new DefaultInterpolatedStringHandler(values.Length - 1 + 2, values.Length, null, buffer);
+        handler.AppendLiteral("[");
+        for (var i = 0; i < values.Length; i++)
+        {
+            if (i > 0) { handler.AppendLiteral(", "); }
+            handler.AppendFormatted(values[i], "D");
+        }
+        handler.AppendLiteral("]");
+        return handler.ToString();
+    }
 }

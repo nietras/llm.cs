@@ -21,7 +21,7 @@ internal static partial class Gpt2
     public static unsafe void Test(string dataDirectory, ILlm llmToUse, int steps, Action<string>? log)
     {
         // build the GPT-2 model from a checkpoint
-        var model = new GPT2();
+        var model = new Model();
         BuildFromCheckpoint(ref model, dataDirectory + ModelBinaryFileName);
         int vocabularySize = model.Config.VocabularySize;
         int channelCount = model.Config.ChannelCount;
@@ -108,7 +108,7 @@ internal static partial class Gpt2
     }
 
     internal static unsafe (ExpectedTensors ExpectedInputsOutputs, ParameterTensors ExpectedGrads)
-        ReadExpectedState(in GPT2 model, string dataDirectory)
+        ReadExpectedState(in Model model, string dataDirectory)
     {
         using var stateFile = File.OpenRead(dataDirectory + ModelDebugBinaryFileName);
 
