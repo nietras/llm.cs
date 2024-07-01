@@ -20,7 +20,7 @@ public class Gpt2Bench
     const string DataDirectory = "../../../";
     Model _model = null!;
     ExpectedTensors _expectedInputsOutputs;
-    ParameterTensors _expectedGrads;
+    ParameterTensors _expectedGrads = null!;
     TimeLlm? _llm;
     int _step;
 

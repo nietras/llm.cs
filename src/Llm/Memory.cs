@@ -19,40 +19,49 @@ public interface ITensorBase<T>
 public unsafe interface ITensor<T> : ITensorBase<T> where T : unmanaged
 {
     public T* Ptr { get; }
-    public T* StrideToPtrAt(int index) => Ptr + Strides[index];
+    public T* StrideToPtrAt(int index) => Ptr + Strides[0] * index;
 }
 
-unsafe delegate T* GetPtr<T>() where T : unmanaged;
+public unsafe delegate T* GetPtr<T>() where T : unmanaged;
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-sealed unsafe class Tensor<T>(GetPtr<T> ptr, nint offset, nint[] lengths, nint[] strides, string name)
+public sealed unsafe class Tensor<T>(GetPtr<T> ptr, nint offset, nint[] lengths, nint[] strides, string name)
     : ITensor<T>
     where T : unmanaged
 {
     public T* Ptr => ptr() + Offset;
+    public T* StrideToPtrAt(int index) => Ptr + Strides[0] * index;
     public nint Offset { get; } = offset;
     public ReadOnlySpan<nint> Lengths => lengths;
     public ReadOnlySpan<nint> Strides => strides;
     public nint Count { get; } = lengths.Product();
     public string Name { get; } = name;
 
+#pragma warning disable CA1062 // Validate arguments of public methods
+    public static implicit operator T*(Tensor<T> t) => t.Ptr;
+#pragma warning restore CA1062 // Validate arguments of public methods
+
     private string DebuggerDisplay => $"{Name} {Lengths.ToShapeText()}={Count:D}";
 }
 
-public class Tensors<T>(object s)
-    : IReadOnlyList<ITensor<T>>, IDisposable
+public unsafe class Tensors<T>(object s)
+    : IReadOnlyList<Tensor<T>>, IDisposable
     where T : unmanaged
 {
     readonly State _state = (State)s;
 
+    public T* MemoryPtr => _state.Ntv!.Ptr;
+
+    public nint TotalCount => _state.TotalCount;
+
     public int Count => _state.Tensors.Count;
 
-    public ITensor<T> this[int index] => _state.Tensors[index];
+    public Tensor<T> this[int index] => _state.Tensors[index];
 
-    public IEnumerator<ITensor<T>> GetEnumerator() => _state.Tensors.GetEnumerator();
+    public IEnumerator<Tensor<T>> GetEnumerator() => _state.Tensors.GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => _state.Tensors.GetEnumerator();
 
-    internal unsafe static ITensor<T> New(nint[] lengths, object s, [CallerMemberName] string name = "")
+    internal unsafe static Tensor<T> New(nint[] lengths, object s, [CallerMemberName] string name = "")
     {
         var state = (State)s;
         var strides = lengths.CalculateStrides();

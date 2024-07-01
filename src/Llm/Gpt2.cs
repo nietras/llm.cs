@@ -25,16 +25,16 @@ internal static partial class Gpt2
         public Model(Config config)
         {
             Config = config;
+            Parameters = ParameterTensors.Create(config);
+            ParameterGradients = null; // ParameterTensorsNew.Create(config);
         }
 
         public Config Config { get; }
 
         // weights (parameters) of the model, and their sizes
-        public ParameterTensors Parameters;
-        public nint[] ParameterSizes = new nint[ParameterTensorCount];
-        public nint ParameterCount;
+        public ParameterTensors Parameters { get; }
         // gradients of the weights (parameters)
-        public ParameterTensors ParameterGradients;
+        public ParameterTensors? ParameterGradients { get; set; }
         // buffers for the AdamW optimizer
         public float* m_memory;
         public float* v_memory;
@@ -62,12 +62,12 @@ internal static partial class Gpt2
 
     unsafe interface ITensorPtrs { public float* MemoryPtr { get; } }
 
-    public sealed class ParameterTensorsNew(in Config c, object s) : Tensors<float>(s)
+    public sealed class ParameterTensors(in Config c, object s) : Tensors<float>(s)
     {
-        public static ParameterTensorsNew Create(in Config c)
+        public static ParameterTensors Create(in Config c)
         {
             var s = new State();
-            var tensors = new ParameterTensorsNew(c, s);
+            var tensors = new ParameterTensors(c, s);
             s.Ntv = new Ntv<float>(s.TotalCount);
             return tensors;
         }
@@ -75,54 +75,29 @@ internal static partial class Gpt2
         // Implicitly depends on property initialization following declared
         // order of properties.
 
-        public ITensor<float> TokenEmbeddings { get; } = New([c.VocabularySize, c.ChannelCount], s);
-        public ITensor<float> PositionEmbeddings { get; } = New([c.MaxTokenCount, c.ChannelCount], s);
+        public Tensor<float> TokenEmbeddings { get; } = New([c.VocabularySize, c.ChannelCount], s);
+        public Tensor<float> PositionEmbeddings { get; } = New([c.MaxTokenCount, c.ChannelCount], s);
 
-        public ITensor<float> LayerNorm1Weights { get; } = New([c.LayerCount, c.ChannelCount], s);
-        public ITensor<float> LayerNorm1Bias { get; } = New([c.LayerCount, c.ChannelCount], s);
+        public Tensor<float> LayerNorm1Weights { get; } = New([c.LayerCount, c.ChannelCount], s);
+        public Tensor<float> LayerNorm1Bias { get; } = New([c.LayerCount, c.ChannelCount], s);
 
-        public ITensor<float> QKVWeights { get; } = New([c.LayerCount, 3 * c.ChannelCount, c.ChannelCount], s);
-        public ITensor<float> QKVBias { get; } = New([c.LayerCount, 3 * c.ChannelCount], s);
+        public Tensor<float> QKVWeights { get; } = New([c.LayerCount, 3 * c.ChannelCount, c.ChannelCount], s);
+        public Tensor<float> QKVBias { get; } = New([c.LayerCount, 3 * c.ChannelCount], s);
 
-        public ITensor<float> AttentionProjectionWeights { get; } = New([c.LayerCount, c.ChannelCount, c.ChannelCount], s);
-        public ITensor<float> AttentionProjectionBias { get; } = New([c.LayerCount, c.ChannelCount], s);
+        public Tensor<float> AttentionProjectionWeights { get; } = New([c.LayerCount, c.ChannelCount, c.ChannelCount], s);
+        public Tensor<float> AttentionProjectionBias { get; } = New([c.LayerCount, c.ChannelCount], s);
 
-        public ITensor<float> LayerNorm2Weights { get; } = New([c.LayerCount, c.ChannelCount], s);
-        public ITensor<float> LayerNorm2Bias { get; } = New([c.LayerCount, c.ChannelCount], s);
+        public Tensor<float> LayerNorm2Weights { get; } = New([c.LayerCount, c.ChannelCount], s);
+        public Tensor<float> LayerNorm2Bias { get; } = New([c.LayerCount, c.ChannelCount], s);
 
-        public ITensor<float> FullConnectWeights { get; } = New([c.LayerCount, 4 * c.ChannelCount, c.ChannelCount], s);
-        public ITensor<float> FullConnectBias { get; } = New([c.LayerCount, 4 * c.ChannelCount], s);
+        public Tensor<float> FullConnectWeights { get; } = New([c.LayerCount, 4 * c.ChannelCount, c.ChannelCount], s);
+        public Tensor<float> FullConnectBias { get; } = New([c.LayerCount, 4 * c.ChannelCount], s);
 
-        public ITensor<float> FullConnectProjectionWeights { get; } = New([c.LayerCount, c.ChannelCount, 4 * c.ChannelCount], s);
-        public ITensor<float> FullConnectProjectionBias { get; } = New([c.LayerCount, c.ChannelCount], s);
+        public Tensor<float> FullConnectProjectionWeights { get; } = New([c.LayerCount, c.ChannelCount, 4 * c.ChannelCount], s);
+        public Tensor<float> FullConnectProjectionBias { get; } = New([c.LayerCount, c.ChannelCount], s);
 
-        public ITensor<float> LayerNormFinalWeights { get; } = New([c.ChannelCount], s);
-        public ITensor<float> LayerNormFinalBias { get; } = New([c.ChannelCount], s);
-    }
-
-
-    const int ParameterTensorCount = 16;
-    [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct ParameterTensors : ITensorPtrs
-    {
-        public float* MemoryPtr => wte;
-
-        public float* wte; // (V, C)
-        public float* wpe; // (maxT, C)
-        public float* ln1w; // (L, C)
-        public float* ln1b; // (L, C)
-        public float* qkvw; // (L, 3*C, C)
-        public float* qkvb; // (L, 3*C)
-        public float* attprojw; // (L, C, C)
-        public float* attprojb; // (L, C)
-        public float* ln2w; // (L, C)
-        public float* ln2b; // (L, C)
-        public float* fcw; // (L, 4*C, C)
-        public float* fcb; // (L, 4*C)
-        public float* fcprojw; // (L, C, 4*C)
-        public float* fcprojb; // (L, C)
-        public float* lnfw; // (C)
-        public float* lnfb; // (C)
+        public Tensor<float> LayerNormFinalWeights { get; } = New([c.ChannelCount], s);
+        public Tensor<float> LayerNormFinalBias { get; } = New([c.ChannelCount], s);
     }
 
     const int OutputTensorCount = 23;
@@ -185,36 +160,9 @@ internal static partial class Gpt2
         Log($"ChannelCount: {C}");
 
         var model = new Model(config);
-        // allocate space for all the parameters and read them in
-        model.ParameterSizes[0] = V * C; // wte
-        model.ParameterSizes[1] = maxT * C; // wpe
-        model.ParameterSizes[2] = L * C; // ln1w
-        model.ParameterSizes[3] = L * C; // ln1b
-        model.ParameterSizes[4] = L * (3 * C) * C; // qkvw
-        model.ParameterSizes[5] = L * (3 * C); // qkvb
-        model.ParameterSizes[6] = L * C * C; // attprojw
-        model.ParameterSizes[7] = L * C; // attprojb
-        model.ParameterSizes[8] = L * C; // ln2w
-        model.ParameterSizes[9] = L * C; // ln2b
-        model.ParameterSizes[10] = L * (4 * C) * C; // fcw
-        model.ParameterSizes[11] = L * (4 * C); // fcb
-        model.ParameterSizes[12] = L * C * (4 * C); // fcprojw
-        model.ParameterSizes[13] = L * C; // fcprojb
-        model.ParameterSizes[14] = C; // lnfw
-        model.ParameterSizes[15] = C; // lnfb
-
-        // count the number of paramaters
-        nint parameterCount = 0;
-        for (nint i = 0; i < ParameterTensorCount; i++)
-        {
-            parameterCount += model.ParameterSizes[i];
-        }
-        Log($"ParameterCount: {parameterCount}");
-        model.ParameterCount = parameterCount;
-
         // read in all the parameters from file
-        model.Parameters = AllocateAndSetPointers<ParameterTensors>(model.ParameterSizes);
-        Extensions.ReadExactlyUnmanaged(file, model.Parameters.MemoryPtr, parameterCount);
+        file.ReadExactlyUnmanaged(model.Parameters.MemoryPtr, model.Parameters.TotalCount);
+        Log($"ParameterCount: {model.Parameters.TotalCount}");
 
         // other inits
         model.Outputs = default;
@@ -277,9 +225,9 @@ internal static partial class Gpt2
         llm.Index = -1;
 
         // forward pass
-        ref var parameters = ref model.Parameters; // for brevity
+        var parameters = model.Parameters; // for brevity
         ref var outputs = ref model.Outputs;
-        llm.EmbedForward(inputs, parameters.wte, parameters.wpe, B, T, C, outputs.encoded); // encoding goes into residual[0]
+        llm.EmbedForward(inputs, parameters.TokenEmbeddings, parameters.PositionEmbeddings, B, T, C, outputs.encoded); // encoding goes into residual[0]
         var layersStartIndex = llm.Index;
         for (int l = 0; l < L; l++)
         {
@@ -287,18 +235,18 @@ internal static partial class Gpt2
             var residual = l == 0 ? outputs.encoded : outputs.residual3 + (l - 1) * B * T * C;
 
             // get the pointers of the weights for this layer
-            float* l_ln1w = parameters.ln1w + l * C;
-            float* l_ln1b = parameters.ln1b + l * C;
-            float* l_qkvw = parameters.qkvw + l * 3 * C * C;
-            float* l_qkvb = parameters.qkvb + l * 3 * C;
-            float* l_attprojw = parameters.attprojw + l * C * C;
-            float* l_attprojb = parameters.attprojb + l * C;
-            float* l_ln2w = parameters.ln2w + l * C;
-            float* l_ln2b = parameters.ln2b + l * C;
-            float* l_fcw = parameters.fcw + l * 4 * C * C;
-            float* l_fcb = parameters.fcb + l * 4 * C;
-            float* l_fcprojw = parameters.fcprojw + l * C * 4 * C;
-            float* l_fcprojb = parameters.fcprojb + l * C;
+            float* l_ln1w = parameters.LayerNorm1Weights.StrideToPtrAt(l);
+            float* l_ln1b = parameters.LayerNorm1Bias.StrideToPtrAt(l);
+            float* l_qkvw = parameters.QKVWeights.StrideToPtrAt(l);
+            float* l_qkvb = parameters.QKVBias.StrideToPtrAt(l);
+            float* l_attprojw = parameters.AttentionProjectionWeights.StrideToPtrAt(l);
+            float* l_attprojb = parameters.AttentionProjectionBias.StrideToPtrAt(l);
+            float* l_ln2w = parameters.LayerNorm2Weights.StrideToPtrAt(l);
+            float* l_ln2b = parameters.LayerNorm2Bias.StrideToPtrAt(l);
+            float* l_fcw = parameters.FullConnectWeights.StrideToPtrAt(l);
+            float* l_fcb = parameters.FullConnectBias.StrideToPtrAt(l);
+            float* l_fcprojw = parameters.FullConnectProjectionWeights.StrideToPtrAt(l);
+            float* l_fcprojb = parameters.FullConnectProjectionBias.StrideToPtrAt(l);
 
             // get the pointers of the activations for this layer
             float* l_ln1 = outputs.ln1 + l * B * T * C;
@@ -331,8 +279,8 @@ internal static partial class Gpt2
             llm.ResidualForward(l_residual2, l_fcproj, B * T * C, l_residual3);
         }
         var lastResidual = outputs.residual3 + (L - 1) * B * T * C; // last residual is in residual3
-        llm.LayerNormForward(lastResidual, parameters.lnfw, parameters.lnfb, B, T, C, outputs.lnf_mean, outputs.lnf_rstd, outputs.lnf);
-        llm.MatMulForward(outputs.lnf, parameters.wte, null, B, T, C, V, outputs.logits);
+        llm.LayerNormForward(lastResidual, parameters.LayerNormFinalWeights, parameters.LayerNormFinalBias, B, T, C, outputs.lnf_mean, outputs.lnf_rstd, outputs.lnf);
+        llm.MatMulForward(outputs.lnf, parameters.TokenEmbeddings, null, B, T, C, V, outputs.logits);
         llm.SoftmaxForward(outputs.logits, B, T, V, outputs.probabilities);
 
         // also forward the cross-entropy loss function if we have the targetTokenIndices
@@ -357,16 +305,16 @@ internal static partial class Gpt2
     {
         llm.Part = "1." + nameof(ZeroGrad);
         llm.Index = -1;
-        if (model.ParameterGradients.MemoryPtr != null) { llm.Zero(model.ParameterGradients.MemoryPtr, model.ParameterCount); }
+        if (model.ParameterGradients is not null) { llm.Zero(model.ParameterGradients.MemoryPtr, model.Parameters.TotalCount); }
         if (model.OutputGradients.MemoryPtr != null) { llm.Zero(model.OutputGradients.MemoryPtr, model.OutputCount); }
     }
 
     static unsafe void Backward(Model model, int* inputTokenIndices, int* targetTokenIndices, TimeLlm llm)
     {
         // lazily allocate the memory for gradients of the weights and activations, if needed
-        if (model.ParameterGradients.MemoryPtr == null)
+        if (model.ParameterGradients is null)
         {
-            model.ParameterGradients = AllocateAndSetPointers<ParameterTensors>(model.ParameterSizes);
+            model.ParameterGradients ??= ParameterTensors.Create(model.Config);
             model.OutputGradients = AllocateAndSetPointers<OutputTensors>(model.OutputSizes);
             ZeroGrad(model, llm);
         }
@@ -380,8 +328,8 @@ internal static partial class Gpt2
         int C = model.Config.ChannelCount;
 
         // backward pass: go in the reverse order of the forward pass, and call backward() functions
-        ParameterTensors parameters = model.Parameters; // for brevity
-        ParameterTensors grads = model.ParameterGradients;
+        var parameters = model.Parameters; // for brevity
+        var grads = model.ParameterGradients;
         OutputTensors acts = model.Outputs;
         OutputTensors grads_acts = model.OutputGradients;
 
@@ -395,10 +343,10 @@ internal static partial class Gpt2
         llm.Index = -1;
 
         llm.CrossEntropySoftmaxBackward(grads_acts.losses, acts.probabilities, targetTokenIndices, B, T, V, grads_acts.logits);
-        llm.MatMulBackward(grads_acts.logits, acts.lnf, parameters.wte, B, T, C, V, grads.wte, null, grads_acts.lnf);
+        llm.MatMulBackward(grads_acts.logits, acts.lnf, parameters.TokenEmbeddings, B, T, C, V, grads.TokenEmbeddings, null, grads_acts.lnf);
         float* residual = acts.residual3 + (L - 1) * B * T * C; // last layer's residual
         float* dresidual = grads_acts.residual3 + (L - 1) * B * T * C; // write to last layer's residual
-        llm.LayerNormBackward(grads_acts.lnf, residual, parameters.lnfw, acts.lnf_mean, acts.lnf_rstd, B, T, C, grads.lnfw, grads.lnfb, dresidual);
+        llm.LayerNormBackward(grads_acts.lnf, residual, parameters.LayerNormFinalWeights, acts.lnf_mean, acts.lnf_rstd, B, T, C, grads.LayerNormFinalWeights, grads.LayerNormFinalBias, dresidual);
 
         var layerStartIndex = llm.Index;
         for (int l = L - 1; l >= 0; l--)
@@ -409,25 +357,25 @@ internal static partial class Gpt2
             dresidual = l == 0 ? grads_acts.encoded : grads_acts.residual3 + (l - 1) * B * T * C;
 
             // get the pointers of the weights for this layer
-            float* l_ln1w = parameters.ln1w + l * C;
-            float* l_qkvw = parameters.qkvw + l * 3 * C * C;
-            float* l_attprojw = parameters.attprojw + l * C * C;
-            float* l_ln2w = parameters.ln2w + l * C;
-            float* l_fcw = parameters.fcw + l * 4 * C * C;
-            float* l_fcprojw = parameters.fcprojw + l * C * 4 * C;
+            float* l_ln1w = parameters.LayerNorm1Weights.StrideToPtrAt(l);
+            float* l_qkvw = parameters.QKVWeights.StrideToPtrAt(l);
+            float* l_attprojw = parameters.AttentionProjectionWeights.StrideToPtrAt(l);
+            float* l_ln2w = parameters.LayerNorm2Weights.StrideToPtrAt(l);
+            float* l_fcw = parameters.FullConnectWeights.StrideToPtrAt(l);
+            float* l_fcprojw = parameters.FullConnectProjectionWeights.StrideToPtrAt(l);
             // get the pointers of the gradients of the weights for this layer
-            float* dl_ln1w = grads.ln1w + l * C;
-            float* dl_ln1b = grads.ln1b + l * C;
-            float* dl_qkvw = grads.qkvw + l * 3 * C * C;
-            float* dl_qkvb = grads.qkvb + l * 3 * C;
-            float* dl_attprojw = grads.attprojw + l * C * C;
-            float* dl_attprojb = grads.attprojb + l * C;
-            float* dl_ln2w = grads.ln2w + l * C;
-            float* dl_ln2b = grads.ln2b + l * C;
-            float* dl_fcw = grads.fcw + l * 4 * C * C;
-            float* dl_fcb = grads.fcb + l * 4 * C;
-            float* dl_fcprojw = grads.fcprojw + l * C * 4 * C;
-            float* dl_fcprojb = grads.fcprojb + l * C;
+            float* dl_ln1w = grads.LayerNorm1Weights.StrideToPtrAt(l);
+            float* dl_ln1b = grads.LayerNorm1Bias.StrideToPtrAt(l);
+            float* dl_qkvw = grads.QKVWeights.StrideToPtrAt(l);
+            float* dl_qkvb = grads.QKVBias.StrideToPtrAt(l);
+            float* dl_attprojw = grads.AttentionProjectionWeights.StrideToPtrAt(l);
+            float* dl_attprojb = grads.AttentionProjectionBias.StrideToPtrAt(l);
+            float* dl_ln2w = grads.LayerNorm2Weights.StrideToPtrAt(l);
+            float* dl_ln2b = grads.LayerNorm2Bias.StrideToPtrAt(l);
+            float* dl_fcw = grads.FullConnectWeights.StrideToPtrAt(l);
+            float* dl_fcb = grads.FullConnectBias.StrideToPtrAt(l);
+            float* dl_fcprojw = grads.FullConnectProjectionWeights.StrideToPtrAt(l);
+            float* dl_fcprojb = grads.FullConnectProjectionBias.StrideToPtrAt(l);
             // get the pointers of the activations for this layer
             float* l_ln1 = acts.ln1 + l * B * T * C;
             float* l_ln1_mean = acts.ln1_mean + l * B * T;
@@ -467,7 +415,7 @@ internal static partial class Gpt2
             llm.MatMulBackward(dl_qkv, l_ln1, l_qkvw, B, T, C, 3 * C, dl_qkvw, dl_qkvb, dl_ln1);
             llm.LayerNormBackward(dl_ln1, residual, l_ln1w, l_ln1_mean, l_ln1_rstd, B, T, C, dl_ln1w, dl_ln1b, dresidual);
         }
-        llm.EmbedBackward(grads_acts.encoded, inputTokenIndices, B, T, C, grads.wte, grads.wpe);
+        llm.EmbedBackward(grads_acts.encoded, inputTokenIndices, B, T, C, grads.TokenEmbeddings, grads.PositionEmbeddings);
     }
 
     public static unsafe void Update(Model model,
@@ -476,14 +424,14 @@ internal static partial class Gpt2
         // lazily allocate the memory for m_memory and v_memory
         if (model.m_memory == null)
         {
-            model.m_memory = calloc<float>(model.ParameterCount);
-            model.v_memory = calloc<float>(model.ParameterCount);
+            model.m_memory = calloc<float>(model.Parameters.TotalCount);
+            model.v_memory = calloc<float>(model.Parameters.TotalCount);
         }
         var parameters = model.Parameters.MemoryPtr;
-        var gradients = model.ParameterGradients.MemoryPtr;
+        var gradients = model.ParameterGradients!.MemoryPtr;
         var ms = model.m_memory;
         var vs = model.v_memory;
-        var parameterCount = model.ParameterCount;
+        var parameterCount = model.Parameters.TotalCount;
 
         llm.Part = "3." + nameof(Update);
         llm.Index = -1;
@@ -572,8 +520,8 @@ internal static partial class Gpt2
 
     internal static unsafe void Free(Model model)
     {
-        free(model.Parameters.MemoryPtr);
-        free(model.ParameterGradients.MemoryPtr);
+        model.Parameters.Dispose();
+        model.ParameterGradients?.Dispose();
         free(model.m_memory);
         free(model.v_memory);
         free(model.Outputs.MemoryPtr);

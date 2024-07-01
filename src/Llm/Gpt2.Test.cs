@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 
@@ -70,8 +71,7 @@ internal static partial class Gpt2
                 var logitsOk = CheckTensor(inputsOutputs.ExpectedLogits, model.Outputs.logits,
                     inputsOutputs.BatchSize * inputsOutputs.TokenCount * vocabularySize, "Logits");
 
-                var gradsOk = CheckGradients(model.ParameterGradients,
-                    channelCount, vocabularySize, maxTokenCount, layerCount, expectedGrads);
+                var gradsOk = CheckTensors(model.ParameterGradients!, expectedGrads);
                 allOk &= logitsOk && gradsOk;
             }
             losses[step] = loss;
@@ -113,8 +113,8 @@ internal static partial class Gpt2
 
         var expectedInputsOutputs = ReadExpectedTensors(model.Config.VocabularySize, stateFile);
 
-        var expectedGrads = AllocateAndSetPointers<ParameterTensors>(model.ParameterSizes);
-        stateFile.ReadExactlyUnmanaged(expectedGrads.MemoryPtr, model.ParameterCount);
+        var expectedGrads = ParameterTensors.Create(model.Config);
+        stateFile.ReadExactlyUnmanaged(expectedGrads.MemoryPtr, expectedGrads.TotalCount);
 
         return (expectedInputsOutputs, expectedGrads);
     }
@@ -155,33 +155,19 @@ internal static partial class Gpt2
         return expectedInputsOutputs;
     }
 
-    static unsafe bool CheckGradients(in ParameterTensors grads,
-        int C, int V, int maxT, int L,
-        in ParameterTensors expectedGrads)
+    static unsafe bool CheckTensors(
+        IReadOnlyList<Tensor<float>> grads,
+        IReadOnlyList<Tensor<float>> expectedGrads)
     {
-        ReadOnlySpan<bool> gradoks =
-        [
-            CheckTensor(grads.wte, expectedGrads.wte, V * C, "dwte"),
-            CheckTensor(grads.wpe, expectedGrads.wpe, maxT * C, "dwpe"),
-            CheckTensor(grads.ln1w, expectedGrads.ln1w, L * C, "dln1w"),
-            CheckTensor(grads.ln1b, expectedGrads.ln1b, L * C, "dln1b"),
-            CheckTensor(grads.qkvw, expectedGrads.qkvw, L * 3 * C * C, "dqkvw"),
-            CheckTensor(grads.qkvb, expectedGrads.qkvb, L * 3 * C, "dqkvb"),
-            CheckTensor(grads.attprojw, expectedGrads.attprojw, L * C * C, "dattprojw"),
-            CheckTensor(grads.attprojb, expectedGrads.attprojb, L * C, "dattprojb"),
-            CheckTensor(grads.ln2w, expectedGrads.ln2w, L * C, "dln2w"),
-            CheckTensor(grads.ln2b, expectedGrads.ln2b, L * C, "dln2b"),
-            CheckTensor(grads.fcw, expectedGrads.fcw, L * 4 * C * C, "dfcw"),
-            CheckTensor(grads.fcb, expectedGrads.fcb, L * 4 * C, "dfcb"),
-            CheckTensor(grads.fcprojw, expectedGrads.fcprojw, L * C * 4 * C, "dfcprojw"),
-            CheckTensor(grads.fcprojb, expectedGrads.fcprojb, L * C, "dfcprojb"),
-            CheckTensor(grads.lnfw, expectedGrads.lnfw, C, "dlnfw"),
-            CheckTensor(grads.lnfb, expectedGrads.lnfb, C, "dlnfb"),
-        ];
-        var allOk = true;
-        for (int i = 0; i < gradoks.Length; i++)
+        var allOk = grads.Count == expectedGrads.Count;
+        for (int i = 0; i < grads.Count; i++)
         {
-            allOk = allOk && gradoks[i];
+            var grad = grads[i];
+            var expectedGrad = expectedGrads[i];
+            Debug.Assert(grad.Name == expectedGrad.Name);
+            Debug.Assert(grad.Count == expectedGrad.Count);
+            var ok = CheckTensor(grad.Ptr, expectedGrad.Ptr, grad.Count, grad.Name);
+            allOk = allOk && ok;
         }
         return allOk;
     }
@@ -191,13 +177,13 @@ internal static partial class Gpt2
     static bool Check(float a, float b) => MathF.Abs(a - b) < CheckDiffLimit;
 
     // poor man's tensor checker
-    static unsafe bool CheckTensor(float* actual, float* expected, int count, string label)
+    static unsafe bool CheckTensor(float* actual, float* expected, nint count, string label)
     {
         const int printUpTo = 0;//5;
-        LogNoNewLine($"{label,-16} ");
+        LogNoNewLine($"{label,-28} ");
         bool ok = true;
         var maxAbsDiff = 0f;
-        for (int i = 0; i < count; i++)
+        for (nint i = 0; i < count; i++)
         {
             var a = actual[i];
             var e = expected[i];
