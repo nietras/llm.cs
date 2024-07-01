@@ -104,31 +104,32 @@ internal static partial class Gpt2
     [StructLayout(LayoutKind.Sequential)]
     public unsafe struct OutputTensors : ITensorPtrs
     {
-        public float* MemoryPtr => encoded;
+        public float* MemoryPtr => Embeded;
 
-        public float* encoded; // (B, T, C)
-        public float* ln1; // (L, B, T, C)
-        public float* ln1_mean; // (L, B, T)
-        public float* ln1_rstd; // (L, B, T)
-        public float* qkv; // (L, B, T, 3*C)
-        public float* atty; // (L, B, T, C)
-        public float* preatt; // (L, B, NH, T, T)
-        public float* att; // (L, B, NH, T, T)
-        public float* attproj; // (L, B, T, C)
-        public float* residual2; // (L, B, T, C)
-        public float* ln2; // (L, B, T, C)
-        public float* ln2_mean; // (L, B, T)
-        public float* ln2_rstd; // (L, B, T)
-        public float* fch; // (L, B, T, 4*C)
-        public float* fch_gelu; // (L, B, T, 4*C)
-        public float* fcproj; // (L, B, T, C)
-        public float* residual3; // (L, B, T, C)
-        public float* lnf; // (B, T, C)
-        public float* lnf_mean; // (B, T)
-        public float* lnf_rstd; // (B, T)
-        public float* logits; // (B, T, V)
-        public float* probabilities; // (B, T, V)
-        public float* losses; // (B, T)
+        public float* Embeded; // (B, T, C)
+        public float* LayerNorm1; // (L, B, T, C)
+        public float* LayerNorm1Mean; // (L, B, T)
+        public float* LayerNorm1InvStdDev; // (L, B, T)
+        public float* QueryKeyValue; // (L, B, T, 3*C)
+        // float* preAttention, float* postAttention, float* output
+        public float* Attention; // (L, B, T, C)
+        public float* PreAttention; // (L, B, NH, T, T)
+        public float* PostAttention; // (L, B, NH, T, T)
+        public float* AttentionProjected; // (L, B, T, C)
+        public float* Residual2; // (L, B, T, C)
+        public float* LayerNorm2; // (L, B, T, C)
+        public float* LayerNorm2Mean; // (L, B, T)
+        public float* LayerNorm2InvStdDev; // (L, B, T)
+        public float* FullyConnected; // (L, B, T, 4*C)
+        public float* FullyConnectedGeLU; // (L, B, T, 4*C)
+        public float* FullyConnectedProjected; // (L, B, T, C)
+        public float* Residual3; // (L, B, T, C)
+        public float* LayerNormFinal; // (B, T, C)
+        public float* LayerNormFinaMean; // (B, T)
+        public float* LayerNormInvStdDev; // (B, T)
+        public float* Logits; // (B, T, V)
+        public float* Probabilities; // (B, T, V)
+        public float* Losses; // (B, T)
     }
 
     public unsafe static Model BuildFromCheckpoint(string checkpointFilePath)
@@ -227,12 +228,12 @@ internal static partial class Gpt2
         // forward pass
         var parameters = model.Parameters; // for brevity
         ref var outputs = ref model.Outputs;
-        llm.EmbedForward(inputs, parameters.TokenEmbeddings, parameters.PositionEmbeddings, B, T, C, outputs.encoded); // encoding goes into residual[0]
+        llm.EmbedForward(inputs, parameters.TokenEmbeddings, parameters.PositionEmbeddings, B, T, C, outputs.Embeded); // encoding goes into residual[0]
         var layersStartIndex = llm.Index;
         for (int l = 0; l < L; l++)
         {
             llm.Index = layersStartIndex;
-            var residual = l == 0 ? outputs.encoded : outputs.residual3 + (l - 1) * B * T * C;
+            var residual = l == 0 ? outputs.Embeded : outputs.Residual3 + (l - 1) * B * T * C;
 
             // get the pointers of the weights for this layer
             float* l_ln1w = parameters.LayerNorm1Weights.StrideToPtrAt(l);
@@ -249,22 +250,22 @@ internal static partial class Gpt2
             float* l_fcprojb = parameters.FullConnectProjectionBias.StrideToPtrAt(l);
 
             // get the pointers of the activations for this layer
-            float* l_ln1 = outputs.ln1 + l * B * T * C;
-            float* l_ln1_mean = outputs.ln1_mean + l * B * T;
-            float* l_ln1_rstd = outputs.ln1_rstd + l * B * T;
-            float* l_qkv = outputs.qkv + l * B * T * 3 * C;
-            float* l_atty = outputs.atty + l * B * T * C;
-            float* l_preatt = outputs.preatt + l * B * NH * T * T;
-            float* l_att = outputs.att + l * B * NH * T * T;
-            float* l_attproj = outputs.attproj + l * B * T * C;
-            float* l_residual2 = outputs.residual2 + l * B * T * C;
-            float* l_ln2 = outputs.ln2 + l * B * T * C;
-            float* l_ln2_mean = outputs.ln2_mean + l * B * T;
-            float* l_ln2_rstd = outputs.ln2_rstd + l * B * T;
-            float* l_fch = outputs.fch + l * B * T * 4 * C;
-            float* l_fch_gelu = outputs.fch_gelu + l * B * T * 4 * C;
-            float* l_fcproj = outputs.fcproj + l * B * T * C;
-            float* l_residual3 = outputs.residual3 + l * B * T * C;
+            float* l_ln1 = outputs.LayerNorm1 + l * B * T * C;
+            float* l_ln1_mean = outputs.LayerNorm1Mean + l * B * T;
+            float* l_ln1_rstd = outputs.LayerNorm1InvStdDev + l * B * T;
+            float* l_qkv = outputs.QueryKeyValue + l * B * T * 3 * C;
+            float* l_atty = outputs.Attention + l * B * T * C;
+            float* l_preatt = outputs.PreAttention + l * B * NH * T * T;
+            float* l_att = outputs.PostAttention + l * B * NH * T * T;
+            float* l_attproj = outputs.AttentionProjected + l * B * T * C;
+            float* l_residual2 = outputs.Residual2 + l * B * T * C;
+            float* l_ln2 = outputs.LayerNorm2 + l * B * T * C;
+            float* l_ln2_mean = outputs.LayerNorm2Mean + l * B * T;
+            float* l_ln2_rstd = outputs.LayerNorm2InvStdDev + l * B * T;
+            float* l_fch = outputs.FullyConnected + l * B * T * 4 * C;
+            float* l_fch_gelu = outputs.FullyConnectedGeLU + l * B * T * 4 * C;
+            float* l_fcproj = outputs.FullyConnectedProjected + l * B * T * C;
+            float* l_residual3 = outputs.Residual3 + l * B * T * C;
 
             // now do the forward pass
             llm.LayerNormForward(residual, l_ln1w, l_ln1b, B, T, C, l_ln1_mean, l_ln1_rstd, l_ln1);
@@ -278,18 +279,18 @@ internal static partial class Gpt2
             llm.MatMulForward(l_fch_gelu, l_fcprojw, l_fcprojb, B, T, 4 * C, C, l_fcproj);
             llm.ResidualForward(l_residual2, l_fcproj, B * T * C, l_residual3);
         }
-        var lastResidual = outputs.residual3 + (L - 1) * B * T * C; // last residual is in residual3
-        llm.LayerNormForward(lastResidual, parameters.LayerNormFinalWeights, parameters.LayerNormFinalBias, B, T, C, outputs.lnf_mean, outputs.lnf_rstd, outputs.lnf);
-        llm.MatMulForward(outputs.lnf, parameters.TokenEmbeddings, null, B, T, C, V, outputs.logits);
-        llm.SoftmaxForward(outputs.logits, B, T, V, outputs.probabilities);
+        var lastResidual = outputs.Residual3 + (L - 1) * B * T * C; // last residual is in residual3
+        llm.LayerNormForward(lastResidual, parameters.LayerNormFinalWeights, parameters.LayerNormFinalBias, B, T, C, outputs.LayerNormFinaMean, outputs.LayerNormInvStdDev, outputs.LayerNormFinal);
+        llm.MatMulForward(outputs.LayerNormFinal, parameters.TokenEmbeddings, null, B, T, C, V, outputs.Logits);
+        llm.SoftmaxForward(outputs.Logits, B, T, V, outputs.Probabilities);
 
         // also forward the cross-entropy loss function if we have the targetTokenIndices
         if (targetTokenIndices != null)
         {
-            llm.CrossEntropyForward(model.Outputs.probabilities, targetTokenIndices, B, T, V, model.Outputs.losses);
+            llm.CrossEntropyForward(model.Outputs.Probabilities, targetTokenIndices, B, T, V, model.Outputs.Losses);
             // for convenience also evaluate the mean loss
             float meanLoss = 0.0f;
-            for (int i = 0; i < B * T; i++) { meanLoss += model.Outputs.losses[i]; }
+            for (int i = 0; i < B * T; i++) { meanLoss += model.Outputs.Losses[i]; }
             meanLoss /= B * T;
             return meanLoss;
         }
@@ -337,24 +338,24 @@ internal static partial class Gpt2
         // technically this is a small, inline backward() pass of calculating
         // total, final loss as the mean over all losses over all (B,T) positions in the batch
         float dloss_mean = 1.0f / (B * T);
-        for (int i = 0; i < B * T; i++) { grads_acts.losses[i] = dloss_mean; }
+        for (int i = 0; i < B * T; i++) { grads_acts.Losses[i] = dloss_mean; }
 
         llm.Part = "2." + nameof(Backward);
         llm.Index = -1;
 
-        llm.CrossEntropySoftmaxBackward(grads_acts.losses, acts.probabilities, targetTokenIndices, B, T, V, grads_acts.logits);
-        llm.MatMulBackward(grads_acts.logits, acts.lnf, parameters.TokenEmbeddings, B, T, C, V, grads.TokenEmbeddings, null, grads_acts.lnf);
-        float* residual = acts.residual3 + (L - 1) * B * T * C; // last layer's residual
-        float* dresidual = grads_acts.residual3 + (L - 1) * B * T * C; // write to last layer's residual
-        llm.LayerNormBackward(grads_acts.lnf, residual, parameters.LayerNormFinalWeights, acts.lnf_mean, acts.lnf_rstd, B, T, C, grads.LayerNormFinalWeights, grads.LayerNormFinalBias, dresidual);
+        llm.CrossEntropySoftmaxBackward(grads_acts.Losses, acts.Probabilities, targetTokenIndices, B, T, V, grads_acts.Logits);
+        llm.MatMulBackward(grads_acts.Logits, acts.LayerNormFinal, parameters.TokenEmbeddings, B, T, C, V, grads.TokenEmbeddings, null, grads_acts.LayerNormFinal);
+        float* residual = acts.Residual3 + (L - 1) * B * T * C; // last layer's residual
+        float* dresidual = grads_acts.Residual3 + (L - 1) * B * T * C; // write to last layer's residual
+        llm.LayerNormBackward(grads_acts.LayerNormFinal, residual, parameters.LayerNormFinalWeights, acts.LayerNormFinaMean, acts.LayerNormInvStdDev, B, T, C, grads.LayerNormFinalWeights, grads.LayerNormFinalBias, dresidual);
 
         var layerStartIndex = llm.Index;
         for (int l = L - 1; l >= 0; l--)
         {
             llm.Index = layerStartIndex;
 
-            residual = l == 0 ? acts.encoded : acts.residual3 + (l - 1) * B * T * C;
-            dresidual = l == 0 ? grads_acts.encoded : grads_acts.residual3 + (l - 1) * B * T * C;
+            residual = l == 0 ? acts.Embeded : acts.Residual3 + (l - 1) * B * T * C;
+            dresidual = l == 0 ? grads_acts.Embeded : grads_acts.Residual3 + (l - 1) * B * T * C;
 
             // get the pointers of the weights for this layer
             float* l_ln1w = parameters.LayerNorm1Weights.StrideToPtrAt(l);
@@ -377,31 +378,31 @@ internal static partial class Gpt2
             float* dl_fcprojw = grads.FullConnectProjectionWeights.StrideToPtrAt(l);
             float* dl_fcprojb = grads.FullConnectProjectionBias.StrideToPtrAt(l);
             // get the pointers of the activations for this layer
-            float* l_ln1 = acts.ln1 + l * B * T * C;
-            float* l_ln1_mean = acts.ln1_mean + l * B * T;
-            float* l_ln1_rstd = acts.ln1_rstd + l * B * T;
-            float* l_qkv = acts.qkv + l * B * T * 3 * C;
-            float* l_atty = acts.atty + l * B * T * C;
-            float* l_att = acts.att + l * B * NH * T * T;
-            float* l_residual2 = acts.residual2 + l * B * T * C;
-            float* l_ln2 = acts.ln2 + l * B * T * C;
-            float* l_ln2_mean = acts.ln2_mean + l * B * T;
-            float* l_ln2_rstd = acts.ln2_rstd + l * B * T;
-            float* l_fch = acts.fch + l * B * T * 4 * C;
-            float* l_fch_gelu = acts.fch_gelu + l * B * T * 4 * C;
+            float* l_ln1 = acts.LayerNorm1 + l * B * T * C;
+            float* l_ln1_mean = acts.LayerNorm1Mean + l * B * T;
+            float* l_ln1_rstd = acts.LayerNorm1InvStdDev + l * B * T;
+            float* l_qkv = acts.QueryKeyValue + l * B * T * 3 * C;
+            float* l_atty = acts.Attention + l * B * T * C;
+            float* l_att = acts.PostAttention + l * B * NH * T * T;
+            float* l_residual2 = acts.Residual2 + l * B * T * C;
+            float* l_ln2 = acts.LayerNorm2 + l * B * T * C;
+            float* l_ln2_mean = acts.LayerNorm2Mean + l * B * T;
+            float* l_ln2_rstd = acts.LayerNorm2InvStdDev + l * B * T;
+            float* l_fch = acts.FullyConnected + l * B * T * 4 * C;
+            float* l_fch_gelu = acts.FullyConnectedGeLU + l * B * T * 4 * C;
             // get the pointers of the gradients of the activations for this layer
-            float* dl_ln1 = grads_acts.ln1 + l * B * T * C;
-            float* dl_qkv = grads_acts.qkv + l * B * T * 3 * C;
-            float* dl_atty = grads_acts.atty + l * B * T * C;
-            float* dl_preatt = grads_acts.preatt + l * B * NH * T * T;
-            float* dl_att = grads_acts.att + l * B * NH * T * T;
-            float* dl_attproj = grads_acts.attproj + l * B * T * C;
-            float* dl_residual2 = grads_acts.residual2 + l * B * T * C;
-            float* dl_ln2 = grads_acts.ln2 + l * B * T * C;
-            float* dl_fch = grads_acts.fch + l * B * T * 4 * C;
-            float* dl_fch_gelu = grads_acts.fch_gelu + l * B * T * 4 * C;
-            float* dl_fcproj = grads_acts.fcproj + l * B * T * C;
-            float* dl_residual3 = grads_acts.residual3 + l * B * T * C;
+            float* dl_ln1 = grads_acts.LayerNorm1 + l * B * T * C;
+            float* dl_qkv = grads_acts.QueryKeyValue + l * B * T * 3 * C;
+            float* dl_atty = grads_acts.Attention + l * B * T * C;
+            float* dl_preatt = grads_acts.PreAttention + l * B * NH * T * T;
+            float* dl_att = grads_acts.PostAttention + l * B * NH * T * T;
+            float* dl_attproj = grads_acts.AttentionProjected + l * B * T * C;
+            float* dl_residual2 = grads_acts.Residual2 + l * B * T * C;
+            float* dl_ln2 = grads_acts.LayerNorm2 + l * B * T * C;
+            float* dl_fch = grads_acts.FullyConnected + l * B * T * 4 * C;
+            float* dl_fch_gelu = grads_acts.FullyConnectedGeLU + l * B * T * 4 * C;
+            float* dl_fcproj = grads_acts.FullyConnectedProjected + l * B * T * C;
+            float* dl_residual3 = grads_acts.Residual3 + l * B * T * C;
 
             // backprop this layer
             llm.ResidualBackward(dl_residual3, B * T * C, dl_residual2, dl_fcproj);
@@ -415,7 +416,7 @@ internal static partial class Gpt2
             llm.MatMulBackward(dl_qkv, l_ln1, l_qkvw, B, T, C, 3 * C, dl_qkvw, dl_qkvb, dl_ln1);
             llm.LayerNormBackward(dl_ln1, residual, l_ln1w, l_ln1_mean, l_ln1_rstd, B, T, C, dl_ln1w, dl_ln1b, dresidual);
         }
-        llm.EmbedBackward(grads_acts.encoded, inputTokenIndices, B, T, C, grads.TokenEmbeddings, grads.PositionEmbeddings);
+        llm.EmbedBackward(grads_acts.Embeded, inputTokenIndices, B, T, C, grads.TokenEmbeddings, grads.PositionEmbeddings);
     }
 
     public static unsafe void Update(Model model,

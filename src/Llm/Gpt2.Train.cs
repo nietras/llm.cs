@@ -97,7 +97,7 @@ internal static partial class Gpt2
                     // leaving this alone because you want separate code for inference anyway
                     // the inference here is just for sanity checking purposes
                     Forward(model, gen_tokens, null, 1, t, llm);
-                    float* probabilities = model.Outputs.probabilities + (t - 1) * model.Config.VocabularySize;
+                    float* probabilities = model.Outputs.Probabilities + (t - 1) * model.Config.VocabularySize;
                     float coin = random_f32(&rng_state);
                     int next_token = sample_mult(probabilities, model.Config.VocabularySize, coin);
                     gen_tokens[t] = next_token;

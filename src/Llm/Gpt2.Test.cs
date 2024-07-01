@@ -68,7 +68,7 @@ internal static partial class Gpt2
             if (step == 0)
             {
                 // at this point
-                var logitsOk = CheckTensor(inputsOutputs.ExpectedLogits, model.Outputs.logits,
+                var logitsOk = CheckTensor(inputsOutputs.ExpectedLogits, model.Outputs.Logits,
                     inputsOutputs.BatchSize * inputsOutputs.TokenCount * vocabularySize, "Logits");
 
                 var gradsOk = CheckTensors(model.ParameterGradients!, expectedGrads);
